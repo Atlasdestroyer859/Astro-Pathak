@@ -29,32 +29,40 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
     // ── Confirmation email ────────────────────────────────────────────
     if (action === 'confirm' && existing.email) {
-      sendClientConfirmation({
-        booking_id:          existing.booking_id,
-        name:                existing.name,
-        email:               existing.email,
-        service:             existing.service,
-        appointment_date:    existing.appointment_date,
-        time_slot:           existing.time_slot,
-        confirmed_time_slot: confirmed_time_slot ?? existing.confirmed_time_slot,
-        mode:                existing.mode,
-        meet_link:           meet_link ?? existing.meet_link,
-      }).catch(err => console.error('Confirmation email error:', err));
+      try {
+        await sendClientConfirmation({
+          booking_id:          existing.booking_id,
+          name:                existing.name,
+          email:               existing.email,
+          service:             existing.service,
+          appointment_date:    existing.appointment_date,
+          time_slot:           existing.time_slot,
+          confirmed_time_slot: confirmed_time_slot ?? existing.confirmed_time_slot,
+          mode:                existing.mode,
+          meet_link:           meet_link ?? existing.meet_link,
+        });
+      } catch (err) {
+        console.error('Confirmation email error:', err);
+      }
     }
 
     // ── Cancellation email ────────────────────────────────────────────
     console.log(`[PATCH] action=${action} email=${existing.email} booking=${existing.booking_id}`);
     if (action === 'cancel' && existing.email) {
       console.log(`[EMAIL] Sending cancellation to ${existing.email}`);
-      sendCancellationEmail({
-        booking_id:       existing.booking_id,
-        name:             existing.name,
-        email:            existing.email,
-        service:          existing.service,
-        appointment_date: existing.appointment_date,
-        time_slot:        existing.time_slot,
-      }).then(() => console.log(`[EMAIL] Cancellation sent OK to ${existing.email}`))
-        .catch(err => console.error('[EMAIL] Cancellation FAILED:', err));
+      try {
+        await sendCancellationEmail({
+          booking_id:       existing.booking_id,
+          name:             existing.name,
+          email:            existing.email,
+          service:          existing.service,
+          appointment_date: existing.appointment_date,
+          time_slot:        existing.time_slot,
+        });
+        console.log(`[EMAIL] Cancellation sent OK to ${existing.email}`);
+      } catch (err) {
+        console.error('[EMAIL] Cancellation FAILED:', err);
+      }
     } else if (action === 'cancel') {
       console.log('[EMAIL] Skipped — no email on booking');
     }
@@ -62,12 +70,15 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     // ── Auto-unblock slot on cancel ───────────────────────────────────
     if (action === 'cancel') {
       const db2 = createServerClient();
-      db2.from('blocked_slots')
-        .delete()
-        .eq('slot_date', existing.appointment_date)
-        .eq('time_slot', existing.time_slot)
-        .then(() => console.log(`[SLOT] Unblocked ${existing.appointment_date} ${existing.time_slot}`))
-        .catch(err => console.warn('[SLOT] Unblock failed:', err?.message));
+      try {
+        await db2.from('blocked_slots')
+          .delete()
+          .eq('slot_date', existing.appointment_date)
+          .eq('time_slot', existing.time_slot);
+        console.log(`[SLOT] Unblocked ${existing.appointment_date} ${existing.time_slot}`);
+      } catch (err) {
+        console.warn('[SLOT] Unblock failed:', (err as Error)?.message);
+      }
     }
 
     return NextResponse.json({ booking: data });

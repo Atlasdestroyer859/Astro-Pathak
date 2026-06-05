@@ -64,14 +64,20 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Auto-block slot so others can't book same date+time ───────────
-    db.from('blocked_slots')
-      .insert({ slot_date: appointment_date, time_slot })
-      .then(() => console.log(`[SLOT] Auto-blocked ${appointment_date} ${time_slot}`))
-      .catch(err => console.warn('[SLOT] Could not block slot (may already exist):', err?.message));
+    try {
+      await db.from('blocked_slots')
+        .insert({ slot_date: appointment_date, time_slot });
+      console.log(`[SLOT] Auto-blocked ${appointment_date} ${time_slot}`);
+    } catch (err) {
+      console.warn('[SLOT] Could not block slot (may already exist):', (err as Error)?.message);
+    }
 
     // ── Admin notification email ───────────────────────────────────────
-    sendAdminNotification({ booking_id, name, phone, service, appointment_date, time_slot, mode })
-      .catch(err => console.error('Admin email error (non-fatal):', err));
+    try {
+      await sendAdminNotification({ booking_id, name, phone, service, appointment_date, time_slot, mode });
+    } catch (err) {
+      console.error('Admin email error (non-fatal):', err);
+    }
 
     return NextResponse.json({ booking: data, booking_id }, { status: 201 });
   } catch (err) {
